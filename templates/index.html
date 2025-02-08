@@ -8,33 +8,21 @@
   <!-- Bootstrap CSS CDN -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* 読み取りエリアのスタイル */
-    #interactive { 
-      width: 100%; /* 幅は画面に合わせる */
-      max-width: 450px; /* PC時は最大450px */
+    /* 450×150 のエリアに固定 */
+    #interactive {
+      width: 450px;
       height: 150px;
       margin: 0 auto;
       border: 2px solid #ddd;
       border-radius: 4px;
+      overflow: hidden; /* エリア外はクリップ */
       position: relative;
-      overflow: hidden; /* ※スマホ用に下記で調整 */
     }
-    /* スマートフォンでのカメラ映像補正 */
-    @media (max-width: 768px) {
-      #interactive {
-        overflow: visible; /* 必要に応じて */
-      }
-      #interactive video {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(90deg);
-        min-width: 100%;
-        min-height: 100%;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-      }
+    /* 動画をエリア内に収め、アスペクト比を維持しつつ必要部分を切り取る */
+    #interactive video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
   </style>
 </head>
@@ -95,7 +83,7 @@
     let currentISBN = "";
 
     document.addEventListener("DOMContentLoaded", function() {
-      // Quagga の初期化設定
+      // Quagga の初期化設定（回転やサイズは固定エリアに合わせる）
       Quagga.init({
         inputStream: {
           name: "Live",
@@ -108,7 +96,6 @@
           },
         },
         decoder: {
-          // 書籍バーコードは通常 EAN-13 を利用
           readers: ["ean_reader"]
         },
         locate: true
@@ -122,7 +109,7 @@
 
       // バーコード読み取り時のコールバック
       Quagga.onDetected(function(result) {
-        if(result && result.codeResult && result.codeResult.code) {
+        if (result && result.codeResult && result.codeResult.code) {
           currentISBN = result.codeResult.code;
           document.getElementById("current-isbn").textContent = currentISBN;
         }
@@ -130,7 +117,7 @@
 
       // 「エントリー」ボタン押下時の処理
       document.getElementById("entry-btn").addEventListener("click", function() {
-        if(currentISBN) {
+        if (currentISBN) {
           fetch("/add_entry", {
             method: "POST",
             headers: {
@@ -140,7 +127,7 @@
           })
           .then(response => response.json())
           .then(data => {
-            if(data.success) {
+            if (data.success) {
               // 書籍情報をテーブルに追加
               const tableBody = document.getElementById("books-table").getElementsByTagName("tbody")[0];
               const newRow = tableBody.insertRow();
