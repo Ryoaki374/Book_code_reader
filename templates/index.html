@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>書籍バーコードリーダー</title>
+  <style>
+    /* 必要に応じたスタイルを記述 */
+    #scanner-container { width: 300px; height: 200px; border: 1px solid #ccc; }
+    table { margin-top: 20px; border-collapse: collapse; }
+    th, td { padding: 8px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>書籍バーコードリーダー</h1>
+  
+  <!-- カメラ映像の表示領域 -->
+  <div id="scanner-container">
+    <video id="video" width="300" height="200" autoplay></video>
+  </div>
+  <br>
+  <button id="start-scan">スキャン開始</button>
+  
+  <!-- 書籍情報を表示する表 -->
+  <table>
+    <thead>
+      <tr>
+        <th>バーコード</th>
+        <th>書名</th>
+        <th>著者名</th>
+        <th>出版社</th>
+        <th>発行年</th>
+      </tr>
+    </thead>
+    <tbody id="book-table-body">
+    </tbody>
+  </table>
+  
+  <br>
+  <!-- CSV ダウンロードボタン -->
+  <a href="/download_csv" target="_blank">CSVダウンロード</a>
+  
+  <!-- QuaggaJS の読み込み（CDN を利用） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script>
+    document.getElementById('start-scan').addEventListener('click', function() {
+      // QuaggaJS を初期化してライブカメラからの映像を取得
+      Quagga.init({
+        inputStream : {
+          name : "Live",
+          type : "LiveStream",
+          target: document.querySelector('#scanner-container')
+        },
+        decoder : {
+          // EAN-13（ISBN-13）の場合は "ean_reader" を利用
+          readers : ["ean_reader"]
+        }
+      }, function(err) {
+        if (err) {
+          console.error(err);
+          return;
+        }
+        console.log("カメラ準備完了");
+        Quagga.start();
+      });
+  
+      // バーコードが検出されたら実行
+      Quagga.onDetected(function(result) {
+        var barcode = result.codeResult.code;
+        console.log("検出したバーコード: " + barcode);
+  
+        // 一度検出したらスキャン停止（複数検出を防止）
+        Quagga.stop();
+  
+        // サーバ側へバーコード情報を送信
+        fetch('/lookup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ barcode: barcode })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            addBookToTable(data.book);
+          } else {
+            alert(data.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+      });
+    });
+  
+    // 取得した書籍情報を表に追加する関数
+    function addBookToTable(book) {
+      var tbody = document.getElementById('book-table-body');
+      var tr = document.createElement('tr');
+  
+      var tdBarcode = document.createElement('td');
+      tdBarcode.textContent = book.barcode;
+      tr.appendChild(tdBarcode);
+  
+      var tdTitle = document.createElement('td');
+      tdTitle.textContent = book.title;
+      tr.appendChild(tdTitle);
+  
+      var tdAuthors = document.createElement('td');
+      tdAuthors.textContent = book.authors;
+      tr.appendChild(tdAuthors);
+  
+      var tdPublisher = document.createElement('td');
+      tdPublisher.textContent = book.publisher;
+      tr.appendChild(tdPublisher);
+  
+      var tdPublishedDate = document.createElement('td');
+      tdPublishedDate.textContent = book.publishedDate;
+      tr.appendChild(tdPublishedDate);
+  
+      tbody.appendChild(tr);
+    }
+  </script>
+</body>
+</html>
