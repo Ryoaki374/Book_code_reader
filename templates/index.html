@@ -8,21 +8,33 @@
   <!-- Bootstrap CSS CDN -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* 450×150 のエリアに固定 */
+    /* 固定サイズの 450×150 エリア。エリア外はクリップ */
     #interactive {
       width: 450px;
       height: 150px;
       margin: 0 auto;
       border: 2px solid #ddd;
       border-radius: 4px;
-      overflow: hidden; /* エリア外はクリップ */
+      overflow: hidden;
       position: relative;
     }
-    /* 動画をエリア内に収め、アスペクト比を維持しつつ必要部分を切り取る */
+    /* video 要素はエリア全体に合わせ、必要に応じてクロップ */
     #interactive video {
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+    /* スマホ表示時に、カメラ映像やテーブル部分をスケール（ボタンは除く） */
+    @media (max-width: 576px) {
+      .scale-container {
+        transform: scale(0.8);
+        transform-origin: top center;
+      }
+      /* スケール後の余白ができる場合は調整 */
+      .scale-container-wrapper {
+        display: flex;
+        justify-content: center;
+      }
     }
   </style>
 </head>
@@ -30,46 +42,54 @@
   <div class="container py-4">
     <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
     
-    <!-- 読み取りエリア（カメラ映像とボタン） -->
-    <div class="row mb-4">
-      <div class="col-12 d-flex flex-column align-items-center">
-        <div id="interactive" class="mb-3"></div>
-        <p class="fs-5">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
-        <div class="d-grid gap-2 d-sm-flex justify-content-center">
-          <button id="entry-btn" class="btn btn-primary me-sm-2">エントリー</button>
-          <button id="download-btn" class="btn btn-success">CSVダウンロード</button>
+    <!-- スケール対象のコンテンツ（カメラ映像、ISBN表示、テーブル） -->
+    <div class="scale-container-wrapper">
+      <div class="scale-container">
+        <!-- カメラ映像エリア -->
+        <div class="row mb-4">
+          <div class="col-12 d-flex flex-column align-items-center">
+            <div id="interactive" class="mb-3"></div>
+            <p class="fs-5">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
+          </div>
+        </div>
+        <!-- 登録された書籍情報テーブル -->
+        <div class="row">
+          <div class="col-12">
+            <h2 class="mb-3">登録された書籍情報</h2>
+            <div class="table-responsive">
+              <table id="books-table" class="table table-striped">
+                <thead class="table-dark">
+                  <tr>
+                    <th>ISBN</th>
+                    <th>書名</th>
+                    <th>著者名</th>
+                    <th>出版社名</th>
+                    <th>発行年</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for book in book_entries %}
+                  <tr>
+                    <td>{{ book.isbn }}</td>
+                    <td>{{ book.title }}</td>
+                    <td>{{ book.authors }}</td>
+                    <td>{{ book.publisher }}</td>
+                    <td>{{ book.published_date }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-
-    <!-- 登録された書籍情報テーブル -->
-    <div class="row">
-      <div class="col-12">
-        <h2 class="mb-3">登録された書籍情報</h2>
-        <div class="table-responsive">
-          <table id="books-table" class="table table-striped">
-            <thead class="table-dark">
-              <tr>
-                <th>ISBN</th>
-                <th>書名</th>
-                <th>著者名</th>
-                <th>出版社名</th>
-                <th>発行年</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for book in book_entries %}
-              <tr>
-                <td>{{ book.isbn }}</td>
-                <td>{{ book.title }}</td>
-                <td>{{ book.authors }}</td>
-                <td>{{ book.publisher }}</td>
-                <td>{{ book.published_date }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+    
+    <!-- ボタンはスケール対象から外す -->
+    <div class="row mt-4">
+      <div class="col-12 d-grid gap-2 d-sm-flex justify-content-center">
+        <button id="entry-btn" class="btn btn-primary me-sm-2">エントリー</button>
+        <button id="download-btn" class="btn btn-success">CSVダウンロード</button>
       </div>
     </div>
   </div>
@@ -83,20 +103,21 @@
     let currentISBN = "";
 
     document.addEventListener("DOMContentLoaded", function() {
-      // Quagga の初期化設定（回転やサイズは固定エリアに合わせる）
+      // Quagga の初期化
       Quagga.init({
         inputStream: {
           name: "Live",
           type: "LiveStream",
           target: document.querySelector('#interactive'),
           constraints: {
-            width: 450,
-            height: 150,
-            facingMode: "environment"  // リアカメラを利用
+            // 高解像度映像の取得を試みる（理想値を指定）
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "environment"
           },
         },
         decoder: {
-          readers: ["ean_reader"]
+          readers: ["ean_reader"] // EAN-13 を読み取る
         },
         locate: true
       }, function(err) {
@@ -109,7 +130,7 @@
 
       // バーコード読み取り時のコールバック
       Quagga.onDetected(function(result) {
-        if (result && result.codeResult && result.codeResult.code) {
+        if(result && result.codeResult && result.codeResult.code) {
           currentISBN = result.codeResult.code;
           document.getElementById("current-isbn").textContent = currentISBN;
         }
@@ -117,7 +138,7 @@
 
       // 「エントリー」ボタン押下時の処理
       document.getElementById("entry-btn").addEventListener("click", function() {
-        if (currentISBN) {
+        if(currentISBN) {
           fetch("/add_entry", {
             method: "POST",
             headers: {
@@ -127,7 +148,7 @@
           })
           .then(response => response.json())
           .then(data => {
-            if (data.success) {
+            if(data.success) {
               // 書籍情報をテーブルに追加
               const tableBody = document.getElementById("books-table").getElementsByTagName("tbody")[0];
               const newRow = tableBody.insertRow();
