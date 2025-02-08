@@ -3,17 +3,37 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <!-- スマホ表示用の viewport 設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>Book Barcode Scanner</title>
   <!-- Bootstrap CSS CDN -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* Quagga 用のカメラ表示領域 */
+    /* 読み取りエリアのスタイル */
     #interactive { 
-      width: 450px; 
-      height: 150px; 
-      margin: auto; 
+      width: 100%; /* 幅は画面に合わせる */
+      max-width: 450px; /* PC時は最大450px */
+      height: 150px;
+      margin: 0 auto;
       border: 2px solid #ddd;
       border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+    /* スマートフォンでカメラ映像が回転してしまう場合の補正（必要に応じて調整） */
+    @media (max-width: 768px) {
+      #interactive video {
+        /* 多くの場合、スマホでは video 要素が90度回転してしまうので補正 */
+        transform: rotate(90deg);
+        /* 回転後のサイズを調整。端末に合わせて値を変更してください */
+        width: auto;
+        height: 100%;
+        /* 中央寄せ */
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
     }
   </style>
 </head>
@@ -21,19 +41,21 @@
   <div class="container py-4">
     <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
     
-    <div class="row">
-      <!-- カメラ映像と操作ボタン -->
-      <div class="col-md-6 mb-4">
+    <!-- 読み取りエリア（カメラ映像とボタン） -->
+    <div class="row mb-4">
+      <div class="col-12 d-flex flex-column align-items-center">
         <div id="interactive" class="mb-3"></div>
         <p class="fs-5">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
-        <div class="d-grid gap-2 d-md-block">
-          <button id="entry-btn" class="btn btn-primary me-2">エントリー</button>
+        <div class="d-grid gap-2 d-sm-flex justify-content-center">
+          <button id="entry-btn" class="btn btn-primary me-sm-2">エントリー</button>
           <button id="download-btn" class="btn btn-success">CSVダウンロード</button>
         </div>
       </div>
-      
-      <!-- 登録された書籍情報テーブル -->
-      <div class="col-md-6">
+    </div>
+
+    <!-- 登録された書籍情報テーブル -->
+    <div class="row">
+      <div class="col-12">
         <h2 class="mb-3">登録された書籍情報</h2>
         <div class="table-responsive">
           <table id="books-table" class="table table-striped">
@@ -85,7 +107,7 @@
           },
         },
         decoder: {
-          // EAN リーダーを利用（書籍バーコードは通常 EAN-13）
+          // 書籍バーコードは通常 EAN-13 を利用
           readers: ["ean_reader"]
         },
         locate: true
