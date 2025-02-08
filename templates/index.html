@@ -3,181 +3,145 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>書籍バーコードスキャナー</title>
-  <!-- Bootstrap CSS（v5） -->
+  <title>Book Barcode Scanner</title>
+  <!-- Bootstrap CSS CDN -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body {
-      padding: 20px;
-    }
-    #video {
-      border: 1px solid #ddd;
+    /* Quagga 用のカメラ表示領域 */
+    #interactive { 
+      width: 450px; 
+      height: 150px; 
+      margin: auto; 
+      border: 2px solid #ddd;
       border-radius: 4px;
-    }
-    #scannedResult {
-      margin-top: 10px;
-      font-size: 1.2em;
-      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 class="mb-4">書籍バーコードスキャナー</h1>
+  <div class="container py-4">
+    <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
     
-    <!-- カメラ映像・バーコード結果表示 -->
-    <div class="mb-3">
-      <video id="video" width="320" height="240" autoplay></video>
-      <canvas id="canvas" width="320" height="240" style="display: none;"></canvas>
-      <div id="scannedResult" class="mt-2">検出されたISBN: なし</div>
-    </div>
-    
-    <!-- エントリー＆CSVダウンロードボタン -->
-    <div class="mb-3">
-      <button id="entryButton" class="btn btn-primary">エントリー</button>
-      <button id="downloadCsv" class="btn btn-success">CSV をダウンロード</button>
-    </div>
-    
-    <!-- モダンな見た目のテーブル -->
-    <table class="table table-striped table-bordered">
-      <thead class="table-dark">
-        <tr>
-          <th>ISBN</th>
-          <th>書名</th>
-          <th>著者</th>
-          <th>出版社</th>
-          <th>発行日</th>
-        </tr>
-      </thead>
-      <tbody id="booksTableBody">
-      </tbody>
-    </table>
-  </div>
-  
-  <!-- 書籍情報確認用モーダル -->
-  <div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="resultModalLabel">書籍情報確認</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+    <div class="row">
+      <!-- カメラ映像と操作ボタン -->
+      <div class="col-md-6 mb-4">
+        <div id="interactive" class="mb-3"></div>
+        <p class="fs-5">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
+        <div class="d-grid gap-2 d-md-block">
+          <button id="entry-btn" class="btn btn-primary me-2">エントリー</button>
+          <button id="download-btn" class="btn btn-success">CSVダウンロード</button>
         </div>
-        <div class="modal-body">
-          <p id="modalContent"></p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" id="modalOk" class="btn btn-primary">OK</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+      </div>
+      
+      <!-- 登録された書籍情報テーブル -->
+      <div class="col-md-6">
+        <h2 class="mb-3">登録された書籍情報</h2>
+        <div class="table-responsive">
+          <table id="books-table" class="table table-striped">
+            <thead class="table-dark">
+              <tr>
+                <th>ISBN</th>
+                <th>書名</th>
+                <th>著者名</th>
+                <th>出版社名</th>
+                <th>発行年</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for book in book_entries %}
+              <tr>
+                <td>{{ book.isbn }}</td>
+                <td>{{ book.title }}</td>
+                <td>{{ book.authors }}</td>
+                <td>{{ book.publisher }}</td>
+                <td>{{ book.published_date }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
-  
-  <!-- Bootstrap JS Bundle（Popper付き） -->
+
+  <!-- Quagga.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- Bootstrap Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const scannedResult = document.getElementById('scannedResult');
-    const entryButton = document.getElementById('entryButton');
-    const booksTableBody = document.getElementById('booksTableBody');
     let currentISBN = "";
-    let lastScannedTime = 0;
-    
-    // カメラ映像の取得（背面カメラを指定）
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        console.error("カメラアクセスエラー: ", err);
-      });
-    
-    // Barcode Detector API を使い、1秒ごとにバーコード読み取り（連続スキャン）
-    async function scanBarcode() {
-      if (!('BarcodeDetector' in window)) {
-        console.error("このブラウザは Barcode Detector API に対応していません。");
-        return;
-      }
-      const barcodeDetector = new BarcodeDetector({ formats: ['ean_13'] });
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      try {
-        const barcodes = await barcodeDetector.detect(canvas);
-        if (barcodes.length > 0) {
-          const detected = barcodes[0].rawValue;
-          // 前回と異なるか、一定時間経過している場合に更新
-          if (detected !== currentISBN || Date.now() - lastScannedTime > 3000) {
-            currentISBN = detected;
-            lastScannedTime = Date.now();
-            scannedResult.textContent = "検出されたISBN: " + currentISBN;
-          }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      // Quagga の初期化設定
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector('#interactive'),
+          constraints: {
+            width: 450,
+            height: 150,
+            facingMode: "environment"  // リアカメラを利用
+          },
+        },
+        decoder: {
+          // EAN リーダーを利用（書籍バーコードは通常 EAN-13）
+          readers: ["ean_reader"]
+        },
+        locate: true
+      }, function(err) {
+        if (err) {
+          console.error("Quagga 初期化エラー:", err);
+          return;
         }
-      } catch (err) {
-        console.error("バーコード検出エラー: ", err);
-      }
-    }
-    setInterval(scanBarcode, 1000);
-    
-    // 「エントリー」ボタン押下時：現在のISBNから書籍情報を取得し、モーダルに表示
-    entryButton.addEventListener('click', () => {
-      if (!currentISBN) {
-        alert("まだバーコードが検出されていません。");
-        return;
-      }
-      fetch('/fetch_book_info', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isbn: currentISBN })
-      })
-      .then(response => response.json())
-      .then(data => {
-        // モーダルに書籍情報を表示
-        let infoHtml = `
-          <strong>ISBN:</strong> ${data.isbn}<br>
-          <strong>書名:</strong> ${data.title || '情報なし'}<br>
-          <strong>著者:</strong> ${data.authors || '情報なし'}<br>
-          <strong>出版社:</strong> ${data.publisher || '情報なし'}<br>
-          <strong>発行日:</strong> ${data.publishedDate || '情報なし'}<br>
-        `;
-        document.getElementById('modalContent').innerHTML = infoHtml;
-        
-        // Bootstrap のモーダルを表示
-        const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
-        resultModal.show();
-        
-        // モーダル内 OK ボタン押下時：サーバに記録し、表に追記
-        document.getElementById('modalOk').onclick = function() {
-          fetch('/commit_book_info', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+        Quagga.start();
+      });
+
+      // バーコード読み取り時のコールバック
+      Quagga.onDetected(function(result) {
+        if(result && result.codeResult && result.codeResult.code) {
+          currentISBN = result.codeResult.code;
+          document.getElementById("current-isbn").textContent = currentISBN;
+        }
+      });
+
+      // 「エントリー」ボタン押下時の処理
+      document.getElementById("entry-btn").addEventListener("click", function() {
+        if(currentISBN) {
+          fetch("/add_entry", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ isbn: currentISBN })
           })
           .then(response => response.json())
-          .then(result => {
-            if (result.status === 'success') {
-              // テーブルに新規行を追加
-              const row = document.createElement('tr');
-              row.innerHTML = `
-                <td>${data.isbn}</td>
-                <td>${data.title}</td>
-                <td>${data.authors}</td>
-                <td>${data.publisher}</td>
-                <td>${data.publishedDate}</td>
-              `;
-              booksTableBody.appendChild(row);
-              resultModal.hide();
+          .then(data => {
+            if(data.success) {
+              // 書籍情報をテーブルに追加
+              const tableBody = document.getElementById("books-table").getElementsByTagName("tbody")[0];
+              const newRow = tableBody.insertRow();
+              newRow.insertCell(0).textContent = data.book.isbn;
+              newRow.insertCell(1).textContent = data.book.title;
+              newRow.insertCell(2).textContent = data.book.authors;
+              newRow.insertCell(3).textContent = data.book.publisher;
+              newRow.insertCell(4).textContent = data.book.published_date;
+            } else {
+              alert("書籍情報が取得できませんでした");
             }
           })
-          .catch(err => console.error("コミットエラー: ", err));
-        };
-      })
-      .catch(err => console.error("書籍情報取得エラー: ", err));
-    });
+          .catch(error => {
+            console.error("エントリーエラー:", error);
+          });
+        } else {
+          alert("ISBN が読み取られていません");
+        }
+      });
 
-    // CSV ダウンロードボタン
-    document.getElementById('downloadCsv').addEventListener('click', () => {
-      window.location.href = '/download_csv';
+      // CSV ダウンロードボタン押下時の処理
+      document.getElementById("download-btn").addEventListener("click", function() {
+        window.location.href = "/download_csv";
+      });
     });
   </script>
 </body>

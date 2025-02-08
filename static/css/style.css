@@ -1,0 +1,19 @@
+/* static/css/style.css */
+body {
+    font-family: Arial, sans-serif;
+  }
+  
+  #scanner-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    margin: 10px auto;
+  }
+  
+  #quagga {
+    width: 100%;
+    height: 250px;  /* バーコードが横長の場合、適宜調整 */
+    background-color: #eee;
+    position: relative;
+  }
+  
