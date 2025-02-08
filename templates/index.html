@@ -1,4 +1,3 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -18,21 +17,23 @@
       border: 2px solid #ddd;
       border-radius: 4px;
       position: relative;
-      overflow: hidden;
+      overflow: hidden; /* ※スマホ用に下記で調整 */
     }
-    /* スマートフォンでカメラ映像が回転してしまう場合の補正（必要に応じて調整） */
+    /* スマートフォンでのカメラ映像補正 */
     @media (max-width: 768px) {
+      #interactive {
+        overflow: visible; /* 必要に応じて */
+      }
       #interactive video {
-        /* 多くの場合、スマホでは video 要素が90度回転してしまうので補正 */
-        transform: rotate(90deg);
-        /* 回転後のサイズを調整。端末に合わせて値を変更してください */
-        width: auto;
-        height: 100%;
-        /* 中央寄せ */
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%) rotate(90deg);
+        min-width: 100%;
+        min-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
       }
     }
   </style>
