@@ -111,8 +111,8 @@
           target: document.querySelector('#interactive'),
           constraints: {
             // 高解像度映像の取得を試みる（理想値を指定）
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1080 },
+            height: { ideal: 1920 },
             facingMode: "environment"
           },
         },
@@ -173,38 +173,6 @@
       document.getElementById("download-btn").addEventListener("click", function() {
         window.location.href = "/download_csv";
       });
-
-      // ----- ここからフォーカス調整の追加コード -----
-      // 少し遅延させて、video要素がQuaggaによって挿入された後に処理を実行する
-      setTimeout(function() {
-        const videoElem = document.querySelector('#interactive video');
-        if (videoElem && videoElem.srcObject) {
-          const stream = videoElem.srcObject;
-          const track = stream.getVideoTracks()[0];
-          if (track && typeof track.applyConstraints === "function") {
-            // trackのcapabilitiesを取得して、manualフォーカスがサポートされているか確認
-            const capabilities = track.getCapabilities();
-            console.log("Video track capabilities:", capabilities);
-            if (capabilities.focusMode && capabilities.focusMode.includes("manual")) {
-              // 可能であれば、focusDistanceを最小値（近いピント）に設定してみる
-              const focusDistanceValue = capabilities.focusDistance ? capabilities.focusDistance.min : 0.1;
-              track.applyConstraints({
-                advanced: [{
-                  focusMode: "manual",
-                  focusDistance: focusDistanceValue
-                }]
-              }).then(() => {
-                console.log("Manual focus applied successfully");
-              }).catch((err) => {
-                console.error("Error applying manual focus:", err);
-              });
-            } else {
-              console.log("Manual focus mode is not supported on this device.");
-            }
-          }
-        }
-      }, 2000); // 2秒後に実行
-      // ----- ここまでフォーカス調整の追加コード -----
     });
   </script>
 </body>
