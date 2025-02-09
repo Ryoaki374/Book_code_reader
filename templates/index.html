@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
   <meta charset="UTF-8">
   <!-- スマホ表示用の viewport 設定 -->
@@ -33,7 +32,6 @@
         transform: scale(0.8);
         transform-origin: top center;
       }
-
       /* スケール後の余白ができる場合は調整 */
       .scale-container-wrapper {
         display: flex;
@@ -42,10 +40,24 @@
     }
   </style>
 </head>
-
 <body>
   <div class="container py-4">
     <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
+
+    <!-- カメラ選択とフォーカス調整用コントロール -->
+    <div class="row mb-4">
+      <div class="col-12 d-flex justify-content-center align-items-center">
+        <label for="camera-select" class="me-2">カメラ選択:</label>
+        <select id="camera-select" class="form-select w-auto"></select>
+      </div>
+    </div>
+    <div class="row mb-4">
+      <div class="col-12 d-flex justify-content-center align-items-center">
+        <label for="focus-slider" class="me-2">フォーカス調整:</label>
+        <input type="range" id="focus-slider" class="form-range" style="width: 300px;">
+        <span id="focus-value" class="ms-2"></span>
+      </div>
+    </div>
 
     <!-- スケール対象のコンテンツ（カメラ映像、ISBN表示、テーブル） -->
     <div class="scale-container-wrapper">
@@ -107,27 +119,47 @@
   <script>
     let currentISBN = "";
 
-    document.addEventListener("DOMContentLoaded", function () {
-      // Quagga の初期化
+    // カメラ選択肢の取得とドロップダウンへの反映
+    function populateCameraSelection() {
+      navigator.mediaDevices.enumerateDevices()
+      .then(devices => {
+        const videoDevices = devices.filter(device => device.kind === "videoinput");
+        const cameraSelect = document.getElementById("camera-select");
+        videoDevices.forEach((device, index) => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.text = device.label || `Camera ${index + 1}`;
+          cameraSelect.appendChild(option);
+        });
+      })
+      .catch(err => {
+        console.error("カメラデバイス取得エラー:", err);
+      });
+    }
+
+    // Quagga の初期化関数。deviceId が指定された場合、そのカメラを使用する
+    function initQuagga(deviceId) {
+      let constraints = {
+        width: { ideal: 1080 },
+        height: { ideal: 1920 },
+        facingMode: "environment",
+        focusMode: 'continuous'
+      };
+      if (deviceId) {
+        constraints.deviceId = { exact: deviceId };
+      }
       Quagga.init({
         inputStream: {
           name: "Live",
           type: "LiveStream",
           target: document.querySelector('#interactive'),
-          constraints: {
-            // 高解像度映像の取得を試みる（理想値を指定）
-            width: { ideal: 1080 },
-            height: { ideal: 1920 },
-            facingMode: "environment",
-            focusMode: 'continuous', // 自動フォーカス
-          },
+          constraints: constraints
         },
         locator: {
-          patchSize: 'medium',  // バーコードを局所的に検出するための「パッチサイズ」を medium に設定
-          //halfSample: true,     // 映像処理を半分のサイズで行い、処理速度を向上させる（ただし精度に影響する可能性も）
+          patchSize: 'medium'
         },
         decoder: {
-          readers: ["ean_reader"] // EAN-13 を読み取る
+          readers: ["ean_reader"]
         },
         locate: true
       }, function (err) {
@@ -136,9 +168,75 @@
           return;
         }
         Quagga.start();
+        // 動画ストリームが開始した後、フォーカス調整機能の設定を試みる
+        setTimeout(checkFocusCapabilities, 500);
+      });
+    }
+
+    // フォーカス調整用スライダーの設定
+    function checkFocusCapabilities() {
+      const videoElem = document.querySelector('#interactive video');
+      if (videoElem && videoElem.srcObject) {
+        const track = videoElem.srcObject.getVideoTracks()[0];
+        if (track && track.getCapabilities) {
+          const capabilities = track.getCapabilities();
+          const focusSlider = document.getElementById("focus-slider");
+          if (capabilities.focusDistance) {
+            // capabilities.focusDistance は { min, max, step } で取得可能（ブラウザ依存）
+            focusSlider.min = capabilities.focusDistance.min;
+            focusSlider.max = capabilities.focusDistance.max;
+            focusSlider.step = capabilities.focusDistance.step || 0.1;
+            // 現在の設定値を取得（サポートされていなければ min 値）
+            const currentFocus = track.getSettings().focusDistance || capabilities.focusDistance.min;
+            focusSlider.value = currentFocus;
+            document.getElementById("focus-value").textContent = currentFocus;
+            focusSlider.disabled = false;
+          } else {
+            // フォーカス調整がサポートされていない場合はスライダーを無効化
+            focusSlider.disabled = true;
+            document.getElementById("focus-value").textContent = "N/A";
+          }
+        }
+      }
+    }
+
+    // フォーカス調整用関数
+    function adjustFocus(newFocus) {
+      const videoElem = document.querySelector('#interactive video');
+      if (videoElem && videoElem.srcObject) {
+        const track = videoElem.srcObject.getVideoTracks()[0];
+        if (track && track.applyConstraints) {
+          track.applyConstraints({ advanced: [{ focusDistance: newFocus }] })
+          .then(() => {
+            console.log("フォーカス調整:", newFocus);
+          })
+          .catch(err => {
+            console.error("フォーカス調整エラー:", err);
+          });
+        }
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      populateCameraSelection();
+      // 初期化時はドロップダウンの最初のカメラを使用
+      initQuagga();
+
+      // カメラ選択変更時：選択されたカメラで再初期化
+      document.getElementById("camera-select").addEventListener("change", function (e) {
+        const selectedDeviceId = e.target.value;
+        Quagga.stop();
+        initQuagga(selectedDeviceId);
       });
 
-      // バーコード読み取り時のコールバック
+      // フォーカス調整スライダーの値変更時
+      document.getElementById("focus-slider").addEventListener("input", function (e) {
+        const newFocus = parseFloat(e.target.value);
+        adjustFocus(newFocus);
+        document.getElementById("focus-value").textContent = newFocus;
+      });
+
+      // Quagga のバーコード読み取り時のコールバック
       Quagga.onDetected(function (result) {
         if (result && result.codeResult && result.codeResult.code) {
           currentISBN = result.codeResult.code;
@@ -186,5 +284,4 @@
     });
   </script>
 </body>
-
 </html>
