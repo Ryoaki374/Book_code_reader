@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <!-- スマホ表示用の viewport 設定 -->
@@ -18,18 +19,21 @@
       overflow: hidden;
       position: relative;
     }
+
     /* video 要素はエリア全体に合わせ、必要に応じてクロップ */
     #interactive video {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
+
     /* スマホ表示時に、カメラ映像やテーブル部分をスケール（ボタンは除く） */
     @media (max-width: 576px) {
       .scale-container {
         transform: scale(0.8);
         transform-origin: top center;
       }
+
       /* スケール後の余白ができる場合は調整 */
       .scale-container-wrapper {
         display: flex;
@@ -38,10 +42,11 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container py-4">
     <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
-    
+
     <!-- スケール対象のコンテンツ（カメラ映像、ISBN表示、テーブル） -->
     <div class="scale-container-wrapper">
       <div class="scale-container">
@@ -84,7 +89,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- ボタンはスケール対象から外す -->
     <div class="row mt-4">
       <div class="col-12 d-grid gap-2 d-sm-flex justify-content-center">
@@ -98,11 +103,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <!-- Bootstrap Bundle with Popper -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
+
   <script>
     let currentISBN = "";
 
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
       // Quagga の初期化
       Quagga.init({
         inputStream: {
@@ -113,14 +118,19 @@
             // 高解像度映像の取得を試みる（理想値を指定）
             width: { ideal: 1080 },
             height: { ideal: 1920 },
-            facingMode: "environment"
+            facingMode: "environment",
+            focusMode: 'continuous', // 自動フォーカス
           },
+        },
+        locator: {
+          patchSize: 'medium',  // バーコードを局所的に検出するための「パッチサイズ」を medium に設定
+          //halfSample: true,     // 映像処理を半分のサイズで行い、処理速度を向上させる（ただし精度に影響する可能性も）
         },
         decoder: {
           readers: ["ean_reader"] // EAN-13 を読み取る
         },
         locate: true
-      }, function(err) {
+      }, function (err) {
         if (err) {
           console.error("Quagga 初期化エラー:", err);
           return;
@@ -129,16 +139,16 @@
       });
 
       // バーコード読み取り時のコールバック
-      Quagga.onDetected(function(result) {
-        if(result && result.codeResult && result.codeResult.code) {
+      Quagga.onDetected(function (result) {
+        if (result && result.codeResult && result.codeResult.code) {
           currentISBN = result.codeResult.code;
           document.getElementById("current-isbn").textContent = currentISBN;
         }
       });
 
       // 「エントリー」ボタン押下時の処理
-      document.getElementById("entry-btn").addEventListener("click", function() {
-        if(currentISBN) {
+      document.getElementById("entry-btn").addEventListener("click", function () {
+        if (currentISBN) {
           fetch("/add_entry", {
             method: "POST",
             headers: {
@@ -146,34 +156,35 @@
             },
             body: JSON.stringify({ isbn: currentISBN })
           })
-          .then(response => response.json())
-          .then(data => {
-            if(data.success) {
-              // 書籍情報をテーブルに追加
-              const tableBody = document.getElementById("books-table").getElementsByTagName("tbody")[0];
-              const newRow = tableBody.insertRow();
-              newRow.insertCell(0).textContent = data.book.isbn;
-              newRow.insertCell(1).textContent = data.book.title;
-              newRow.insertCell(2).textContent = data.book.authors;
-              newRow.insertCell(3).textContent = data.book.publisher;
-              newRow.insertCell(4).textContent = data.book.published_date;
-            } else {
-              alert("書籍情報が取得できませんでした");
-            }
-          })
-          .catch(error => {
-            console.error("エントリーエラー:", error);
-          });
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                // 書籍情報をテーブルに追加
+                const tableBody = document.getElementById("books-table").getElementsByTagName("tbody")[0];
+                const newRow = tableBody.insertRow();
+                newRow.insertCell(0).textContent = data.book.isbn;
+                newRow.insertCell(1).textContent = data.book.title;
+                newRow.insertCell(2).textContent = data.book.authors;
+                newRow.insertCell(3).textContent = data.book.publisher;
+                newRow.insertCell(4).textContent = data.book.published_date;
+              } else {
+                alert("書籍情報が取得できませんでした");
+              }
+            })
+            .catch(error => {
+              console.error("エントリーエラー:", error);
+            });
         } else {
           alert("ISBN が読み取られていません");
         }
       });
 
       // CSV ダウンロードボタン押下時の処理
-      document.getElementById("download-btn").addEventListener("click", function() {
+      document.getElementById("download-btn").addEventListener("click", function () {
         window.location.href = "/download_csv";
       });
     });
   </script>
 </body>
+
 </html>
