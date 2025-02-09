@@ -10,7 +10,7 @@
   <style>
     /* 固定サイズの 450×150 エリア。エリア外はクリップ */
     #interactive {
-      width: 450px;
+      width: 400px;
       height: 150px;
       margin: 0 auto;
       border: 2px solid #ddd;
@@ -18,21 +18,18 @@
       overflow: hidden;
       position: relative;
     }
-
     /* video 要素はエリア全体に合わせ、必要に応じてクロップ */
     #interactive video {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
-
     /* スマホ表示時に、カメラ映像やテーブル部分をスケール（ボタンは除く） */
     @media (max-width: 576px) {
       .scale-container {
         transform: scale(0.8);
         transform-origin: top center;
       }
-      /* スケール後の余白ができる場合は調整 */
       .scale-container-wrapper {
         display: flex;
         justify-content: center;
@@ -44,29 +41,24 @@
   <div class="container py-4">
     <h1 class="mb-4 text-center">書籍バーコードスキャナー</h1>
 
-    <!-- カメラ選択とフォーカス調整用コントロール -->
+    <!-- カメラ選択用コントロール -->
     <div class="row mb-4">
       <div class="col-12 d-flex justify-content-center align-items-center">
         <label for="camera-select" class="me-2">カメラ選択:</label>
         <select id="camera-select" class="form-select w-auto"></select>
       </div>
     </div>
-    <div class="row mb-4">
-      <div class="col-12 d-flex justify-content-center align-items-center">
-        <label for="focus-slider" class="me-2">フォーカス調整:</label>
-        <input type="range" id="focus-slider" class="form-range" style="width: 300px;">
-        <span id="focus-value" class="ms-2"></span>
-      </div>
-    </div>
 
-    <!-- スケール対象のコンテンツ（カメラ映像、ISBN表示、テーブル） -->
+    <!-- スケール対象のコンテンツ -->
     <div class="scale-container-wrapper">
       <div class="scale-container">
-        <!-- カメラ映像エリア -->
+        <!-- カメラ映像エリアとISBN表示、エントリーボタン -->
         <div class="row mb-4">
           <div class="col-12 d-flex flex-column align-items-center">
             <div id="interactive" class="mb-3"></div>
-            <p class="fs-5">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
+            <p class="fs-5 mb-2">現在のISBN: <span id="current-isbn" class="fw-bold">なし</span></p>
+            <!-- エントリーボタンをISBN表示の下に配置 -->
+            <button id="entry-btn" class="btn btn-primary">エントリー</button>
           </div>
         </div>
         <!-- 登録された書籍情報テーブル -->
@@ -102,10 +94,9 @@
       </div>
     </div>
 
-    <!-- ボタンはスケール対象から外す -->
+    <!-- CSVダウンロードボタンのみを別行で配置 -->
     <div class="row mt-4">
       <div class="col-12 d-grid gap-2 d-sm-flex justify-content-center">
-        <button id="entry-btn" class="btn btn-primary me-sm-2">エントリー</button>
         <button id="download-btn" class="btn btn-success">CSVダウンロード</button>
       </div>
     </div>
@@ -142,8 +133,7 @@
       let constraints = {
         width: { ideal: 1080 },
         height: { ideal: 1920 },
-        facingMode: "environment",
-        focusMode: 'continuous'
+        facingMode: "environment"
       };
       if (deviceId) {
         constraints.deviceId = { exact: deviceId };
@@ -168,53 +158,7 @@
           return;
         }
         Quagga.start();
-        // 動画ストリームが開始した後、フォーカス調整機能の設定を試みる
-        setTimeout(checkFocusCapabilities, 500);
       });
-    }
-
-    // フォーカス調整用スライダーの設定
-    function checkFocusCapabilities() {
-      const videoElem = document.querySelector('#interactive video');
-      if (videoElem && videoElem.srcObject) {
-        const track = videoElem.srcObject.getVideoTracks()[0];
-        if (track && track.getCapabilities) {
-          const capabilities = track.getCapabilities();
-          const focusSlider = document.getElementById("focus-slider");
-          if (capabilities.focusDistance) {
-            // capabilities.focusDistance は { min, max, step } で取得可能（ブラウザ依存）
-            focusSlider.min = capabilities.focusDistance.min;
-            focusSlider.max = capabilities.focusDistance.max;
-            focusSlider.step = capabilities.focusDistance.step || 0.1;
-            // 現在の設定値を取得（サポートされていなければ min 値）
-            const currentFocus = track.getSettings().focusDistance || capabilities.focusDistance.min;
-            focusSlider.value = currentFocus;
-            document.getElementById("focus-value").textContent = currentFocus;
-            focusSlider.disabled = false;
-          } else {
-            // フォーカス調整がサポートされていない場合はスライダーを無効化
-            focusSlider.disabled = true;
-            document.getElementById("focus-value").textContent = "N/A";
-          }
-        }
-      }
-    }
-
-    // フォーカス調整用関数
-    function adjustFocus(newFocus) {
-      const videoElem = document.querySelector('#interactive video');
-      if (videoElem && videoElem.srcObject) {
-        const track = videoElem.srcObject.getVideoTracks()[0];
-        if (track && track.applyConstraints) {
-          track.applyConstraints({ advanced: [{ focusDistance: newFocus }] })
-          .then(() => {
-            console.log("フォーカス調整:", newFocus);
-          })
-          .catch(err => {
-            console.error("フォーカス調整エラー:", err);
-          });
-        }
-      }
     }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -227,13 +171,6 @@
         const selectedDeviceId = e.target.value;
         Quagga.stop();
         initQuagga(selectedDeviceId);
-      });
-
-      // フォーカス調整スライダーの値変更時
-      document.getElementById("focus-slider").addEventListener("input", function (e) {
-        const newFocus = parseFloat(e.target.value);
-        adjustFocus(newFocus);
-        document.getElementById("focus-value").textContent = newFocus;
       });
 
       // Quagga のバーコード読み取り時のコールバック
